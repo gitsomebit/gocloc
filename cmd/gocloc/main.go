@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/hhatto/gocloc"
 	"github.com/jessevdk/go-flags"
@@ -33,10 +34,9 @@ const OutputTypeJSON string = "json"
 const OutputTypeMarkdown string = "markdown"
 
 const (
-	fileHeader             string = "File"
-	languageHeader         string = "Language"
-	commonHeader           string = "files          blank        comment           code          total"
-	defaultOutputSeparator string = "-"
+	fileHeader     string = "File"
+	languageHeader string = "Language"
+	commonHeader   string = "files          blank        comment           code          total"
 )
 
 var rowLen int // set in WriteHeader()
@@ -44,20 +44,21 @@ var rowLen int // set in WriteHeader()
 // CmdOptions is gocloc command options.
 // It is necessary to use notation that follows go-flags.
 type CmdOptions struct {
-	ByFile         bool   `long:"by-file" description:"report results for every encountered source file"`
-	SortTag        string `long:"sort" default:"code" description:"sort based on a certain column" choice:"name" choice:"files" choice:"blank" choice:"comment" choice:"code"`
-	OutputType     string `long:"output-type" default:"default" description:"output type [values: default,markdown,cloc-xml,sloccount,json]"`
-	ExcludeExt     string `long:"exclude-ext" description:"exclude file name extensions (separated commas)"`
-	IncludeLang    string `long:"include-lang" description:"include language name (separated commas)"`
-	Match          string `long:"match" description:"include file name (regex)"`
-	NotMatch       string `long:"not-match" description:"exclude file name (regex)"`
-	MatchDir       string `long:"match-d" description:"include dir name (regex)"`
-	NotMatchDir    string `long:"not-match-d" description:"exclude dir name (regex)"`
-	Fullpath       bool   `long:"fullpath" description:"apply match/not-match options to full file paths instead of base names"`
-	Debug          bool   `long:"debug" description:"dump debug log for developer"`
-	SkipDuplicated bool   `long:"skip-duplicated" description:"skip duplicated files"`
-	ShowLang       bool   `long:"show-lang" description:"print about all languages and extensions"`
-	ShowVersion    bool   `long:"version" description:"print version info"`
+	HorizontalSeperator string `long:"h-sep" default:"-" description:"specify a custom single character as horizontal seperator"`
+	ByFile              bool   `long:"by-file" description:"report results for every encountered source file"`
+	SortTag             string `long:"sort" default:"code" description:"sort based on a certain column" choice:"name" choice:"files" choice:"blank" choice:"comment" choice:"code"`
+	OutputType          string `long:"output-type" default:"default" description:"output type [values: default,markdown,cloc-xml,sloccount,json]"`
+	ExcludeExt          string `long:"exclude-ext" description:"exclude file name extensions (separated commas)"`
+	IncludeLang         string `long:"include-lang" description:"include language name (separated commas)"`
+	Match               string `long:"match" description:"include file name (regex)"`
+	NotMatch            string `long:"not-match" description:"exclude file name (regex)"`
+	MatchDir            string `long:"match-d" description:"include dir name (regex)"`
+	NotMatchDir         string `long:"not-match-d" description:"exclude dir name (regex)"`
+	Fullpath            bool   `long:"fullpath" description:"apply match/not-match options to full file paths instead of base names"`
+	Debug               bool   `long:"debug" description:"dump debug log for developer"`
+	SkipDuplicated      bool   `long:"skip-duplicated" description:"skip duplicated files"`
+	ShowLang            bool   `long:"show-lang" description:"print about all languages and extensions"`
+	ShowVersion         bool   `long:"version" description:"print version info"`
 }
 
 type outputBuilder struct {
@@ -90,9 +91,9 @@ func (o *outputBuilder) WriteHeader() {
 		// cant put `|` in commonHeader direcly because it is used by md output
 		headerWithSeperator := commonHeader[:53] + "|" + commonHeader[54:]
 
-		fmt.Println(strings.Repeat(defaultOutputSeparator, rowLen)) // seperator
+		fmt.Println(strings.Repeat(o.opts.HorizontalSeperator, rowLen)) // seperator
 		fmt.Printf("%-[2]*[1]s %[3]s\n", header, headerLen, headerWithSeperator)
-		fmt.Println(strings.Repeat(defaultOutputSeparator, rowLen)) // seperator
+		fmt.Println(strings.Repeat(o.opts.HorizontalSeperator, rowLen)) // seperator
 	}
 
 	if o.opts.OutputType == OutputTypeMarkdown {
@@ -127,7 +128,7 @@ func (o *outputBuilder) WriteFooter() {
 	maxPathLen := o.result.MaxPathLength
 
 	if o.opts.OutputType == OutputTypeDefault {
-		fmt.Println(strings.Repeat(defaultOutputSeparator, rowLen)) // seperator
+		fmt.Println(strings.Repeat(o.opts.HorizontalSeperator, rowLen)) // seperator
 
 		totalLines := total.Blanks + total.Comments + total.Code
 		if o.opts.ByFile {
@@ -141,7 +142,7 @@ func (o *outputBuilder) WriteFooter() {
 				"TOTAL", total.Total, total.Blanks, total.Comments, total.Code, totalLines,
 			)
 		}
-		fmt.Println(strings.Repeat(defaultOutputSeparator, rowLen)) // seperator
+		fmt.Println(strings.Repeat(o.opts.HorizontalSeperator, rowLen)) // seperator
 	}
 
 	if o.opts.OutputType == OutputTypeMarkdown {
@@ -384,6 +385,15 @@ func main() {
 	}
 	if opts.NotMatchDir != "" {
 		clocOpts.ReNotMatchDir = regexp.MustCompile(opts.NotMatchDir)
+	}
+
+	// formatting is off, when acharacter is used that is wider than one character
+	// exp. 世 is 2 characters wide
+	// could use github.com/mattn/go-runewidth for calculation, but idk if maintainer wants to add another dep
+	// for now its on the user to specify a 1-charactrer-wide character
+	if utf8.RuneCountInString(opts.HorizontalSeperator) != 1 {
+		fmt.Println("`--h-sep` must be a single character")
+		os.Exit(1)
 	}
 
 	// setup option for include languages
