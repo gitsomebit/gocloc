@@ -74,6 +74,12 @@ func newOutputBuilder(result *gocloc.Result, opts *CmdOptions) *outputBuilder {
 
 func (o *outputBuilder) WriteHeader() {
 	maxPathLen := o.result.MaxPathLength
+
+	// for --by-file, ensure spacing for total column
+	if o.opts.ByFile && maxPathLen < len("total") {
+		maxPathLen = len("total")
+	}
+
 	headerLen := 28
 	header := languageHeader
 
