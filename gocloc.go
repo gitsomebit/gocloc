@@ -1,5 +1,10 @@
 package gocloc
 
+import (
+	"runtime"
+	"sync"
+)
+
 // Processor is gocloc analyzing processor.
 type Processor struct {
 	langs *DefinedLanguages
@@ -12,6 +17,16 @@ type Result struct {
 	Files         map[string]*ClocFile
 	Languages     map[string]*Language
 	MaxPathLength int
+}
+
+type job struct {
+	file string
+	lang *Language
+}
+type res struct {
+	file string
+	lang *Language
+	cf   *ClocFile
 }
 
 // NewProcessor returns Processor.
@@ -42,22 +57,60 @@ func (p *Processor) Analyze(paths []string) (*Result, error) {
 	}
 	clocFiles := make(map[string]*ClocFile, num)
 
-	for _, language := range languages {
-		for _, file := range language.Files {
-			cf := AnalyzeFile(file, language, p.opts)
-			cf.Lang = language.Name
+	jobs := make(chan job, 1024)
+	results := make(chan res, 1024)
 
-			language.Code += cf.Code
-			language.Comments += cf.Comments
-			language.Blanks += cf.Blanks
-			clocFiles[file] = cf
+	workerCount := max(runtime.GOMAXPROCS(0), 1)
+	// Avoid opening too many files at once on huge repos
+	const maxWorkers = 32
+	if workerCount > maxWorkers {
+		workerCount = maxWorkers
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(workerCount)
+
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			defer wg.Done()
+			for j := range jobs {
+				cf := AnalyzeFile(j.file, j.lang, p.opts)
+				cf.Lang = j.lang.Name
+				results <- res{file: j.file, lang: j.lang, cf: cf}
+			}
+		}()
+	}
+
+	// Feed jobs then close channel
+	go func() {
+		for _, language := range languages {
+			for _, file := range language.Files {
+				jobs <- job{file: file, lang: language}
+			}
 		}
+		close(jobs)
+	}()
 
+	// Close results after workers finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Single-threaded aggregation (no race conditions)
+	for r := range results {
+		r.lang.Code += r.cf.Code
+		r.lang.Comments += r.cf.Comments
+		r.lang.Blanks += r.cf.Blanks
+		clocFiles[r.file] = r.cf
+	}
+
+	// Totals
+	for _, language := range languages {
 		files := int32(len(language.Files))
-		if len(language.Files) <= 0 {
+		if files <= 0 {
 			continue
 		}
-
 		total.Total += files
 		total.Blanks += language.Blanks
 		total.Comments += language.Comments

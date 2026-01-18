@@ -14,6 +14,10 @@ type ClocOptions struct {
 	ReMatchDir     *regexp.Regexp
 	Fullpath       bool
 
+	// IMPORTANT:
+	// OnCode / OnBlank / OnComment are called from diffrent threads. If those
+	// callbacks write to shared state, you’ll want a mutex inside your callback
+
 	// OnCode is triggered for each line of code.
 	OnCode func(line string)
 	// OnBlack is triggered for each blank line.
