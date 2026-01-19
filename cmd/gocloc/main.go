@@ -58,6 +58,7 @@ type CmdOptions struct {
 	Fullpath       bool   `long:"fullpath" description:"apply match/not-match options to full file paths instead of base names"`
 	Debug          bool   `long:"debug" description:"dump debug log for developer"`
 	SkipDuplicated bool   `long:"skip-duplicated" description:"skip duplicated files"`
+	NoGoroutines   bool   `long:"no-goroutines" description:"disables concurrent file processing"`
 	ShowLang       bool   `long:"show-lang" description:"print about all languages and extensions"`
 	ShowVersion    bool   `long:"version" description:"print version info"`
 }
@@ -345,6 +346,7 @@ func main() {
 	clocOpts.Debug = opts.Debug
 	clocOpts.SkipDuplicated = opts.SkipDuplicated
 	clocOpts.Fullpath = opts.Fullpath
+	clocOpts.NoGoroutines = opts.NoGoroutines
 
 	processor := gocloc.NewProcessor(languages, clocOpts)
 	result, err := processor.Analyze(paths)

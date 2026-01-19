@@ -14,9 +14,15 @@ type ClocOptions struct {
 	ReMatchDir     *regexp.Regexp
 	Fullpath       bool
 
+	// NoGoroutines disables concurrent file processing.
+	// This can be useful for debugging, deterministic profiling, or
+	// environments where parallel file IO is undesirable.
+	NoGoroutines bool
+
 	// IMPORTANT:
 	// OnCode / OnBlank / OnComment are called from diffrent threads. If those
-	// callbacks write to shared state, you’ll want a mutex inside your callback
+	// callbacks write to shared state, you’ll want a mutex inside your callback,
+	// Or enable the `no-goroutines` flag
 
 	// OnCode is triggered for each line of code.
 	OnCode func(line string)

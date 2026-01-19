@@ -57,6 +57,38 @@ func (p *Processor) Analyze(paths []string) (*Result, error) {
 	}
 	clocFiles := make(map[string]*ClocFile, num)
 
+	// Optional single-threaded mode (no goroutines)
+	if p.opts != nil && p.opts.NoGoroutines {
+		for _, language := range languages {
+			for _, file := range language.Files {
+				cf := AnalyzeFile(file, language, p.opts)
+				cf.Lang = language.Name
+
+				language.Code += cf.Code
+				language.Comments += cf.Comments
+				language.Blanks += cf.Blanks
+				clocFiles[file] = cf
+			}
+
+			files := int32(len(language.Files))
+			if files <= 0 {
+				continue
+			}
+
+			total.Total += files
+			total.Blanks += language.Blanks
+			total.Comments += language.Comments
+			total.Code += language.Code
+		}
+
+		return &Result{
+			Total:         total,
+			Files:         clocFiles,
+			Languages:     languages,
+			MaxPathLength: maxPathLen,
+		}, nil
+	}
+
 	jobs := make(chan job, 1024)
 	results := make(chan res, 1024)
 
